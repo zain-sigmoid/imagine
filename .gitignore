@@ -1,0 +1,21 @@
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+prompts.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+imagine-code.zip
+generated_standrd.png
+imagine-code/
+
