@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+import requests
 from dotenv import load_dotenv
 import streamlit as st
 from PIL import Image
@@ -10,6 +11,7 @@ import time
 from core.themes import THEMES
 from core.model import Imagine
 from core.prompt_store import init_db, save_prompt, get_recent_prompts
+from core.postprocessing import PostProcessing
 
 
 # ---------- Setup ----------
@@ -33,6 +35,9 @@ if "recent_prompts" not in st.session_state:
     st.session_state.recent_prompts = []
 if "prompt" not in st.session_state:
     st.session_state.prompt = ""
+
+if "images" not in st.session_state:
+    st.session_state.images = {}
 
 st.session_state.recent_prompts = get_recent_prompts(limit=5)
 
@@ -93,19 +98,6 @@ if submitted and prompt.strip():
     recents.insert(0, prompt)
     st.session_state.recent_prompts = recents[:5]
     gallery.empty()
-
-
-def mock_response_from_file(path: str):
-    # Read and encode the image
-    with open(path, "rb") as f:
-        img_bytes = f.read()
-    b64_str = base64.b64encode(img_bytes).decode("utf-8")
-
-    # Match OpenAI's response format: resp.data[0].b64_json
-    fake_item = SimpleNamespace(b64_json=b64_str, url=None)
-    fake_resp = SimpleNamespace(data=[fake_item])
-    return fake_resp
-
 
 # ---------- Right column: Recent prompts (compact, scrollable, no buttons) ----------
 with right:
@@ -209,30 +201,23 @@ if submitted:
                 for i, item in enumerate(resp.data, start=1):
                     if getattr(item, "b64_json", None):
                         img = Imagine.b64_to_image(item.b64_json)
-                        st.image(
-                            img, caption=f"Output {i}", width="stretch"
-                        )  # <-- no deprecated arg
-                        buf = io.BytesIO()
-                        img.save(buf, format="PNG")
-                        st.download_button(
-                            label=f"Download Image",
-                            data=buf.getvalue(),
-                            file_name=f"dalle_{i}.png",
-                            mime="image/png",
-                            width="stretch",
-                        )
+                        st.session_state.images["org"] = img
+                        low, med, high = PostProcessing.apply_post_processing(img)
+                        st.session_state.images["low"] = low
+                        st.session_state.images["medium"] = med
+                        st.session_state.images["high"] = high
                     elif getattr(item, "url", None):
-                        st.image(
-                            item.url, caption=f"Output {i}", width="stretch"
-                        )  # <-- no deprecated arg
-                        if hasattr(st, "link_button"):
-                            st.link_button(
-                                "See in new tab ↗", item.url, width="stretch"
-                            )
-                        else:
-                            st.markdown(
-                                f'<a href="{item.url}" target="_blank" rel="noopener noreferrer">See in new tab ↗</a>',
-                                unsafe_allow_html=True,
-                            )
+                        try:
+                            print("Fetching image from URL:")
+                            resp = requests.get(item.url, timeout=10)
+                            resp.raise_for_status()
+                            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                            st.session_state.images["org"] = img
+                            low, med, high = PostProcessing.apply_post_processing(img)
+                            st.session_state.images["low"] = low
+                            st.session_state.images["medium"] = med
+                            st.session_state.images["high"] = high
+                        except Exception as e:
+                            st.warning(f"Could not fetch image from URL: {e}")
                     else:
                         st.info(f"Result {i}: Unrecognized response format.")
