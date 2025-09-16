@@ -3,4 +3,4 @@ openai
 pillow 
 python-dotenv
 PyYAML
-opencv-python
+opencv-python-headless
