@@ -58,11 +58,11 @@ with left:
         prompt = st.text_area(
             "Describe your image",
             key="prompt",
-            height=140,
+            height=200,
             placeholder="e.g., an ultrarealistic photo of a cozy reading nook at sunrise, soft bokeh, 35mm film look",
         )
         prompt.join(st.session_state.prompt)
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             size = st.selectbox(
                 "Size", ["1024x1024", "1024x1792", "1792x1024"], index=0
@@ -73,6 +73,10 @@ with left:
                 ["standard", "hd"],
                 index=0,
                 help="Use 'hd' if your plan/model supports it (may cost more).",
+            )
+        with col3:
+            option = st.selectbox(
+                "Choose Enhancement Level:", ["Low", "Medium", "High"]
             )
         t1, t2 = st.columns([2, 2])
         with t1:
@@ -106,7 +110,7 @@ with right:
     # Try Streamlit's scrollable container; fallback to CSS on older versions
     scroll = None
     try:
-        scroll = st.container(height=320, border=False)  # smaller fixed height
+        scroll = st.container(height=390, border=False)  # smaller fixed height
     except TypeError:
         st.markdown(
             """
@@ -201,23 +205,74 @@ if submitted:
                 for i, item in enumerate(resp.data, start=1):
                     if getattr(item, "b64_json", None):
                         img = Imagine.b64_to_image(item.b64_json)
-                        st.session_state.images["org"] = img
-                        low, med, high = PostProcessing.apply_post_processing(img)
-                        st.session_state.images["low"] = low
-                        st.session_state.images["medium"] = med
-                        st.session_state.images["high"] = high
                     elif getattr(item, "url", None):
                         try:
                             print("Fetching image from URL:")
                             resp = requests.get(item.url, timeout=10)
                             resp.raise_for_status()
                             img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                            st.session_state.images["org"] = img
-                            low, med, high = PostProcessing.apply_post_processing(img)
-                            st.session_state.images["low"] = low
-                            st.session_state.images["medium"] = med
-                            st.session_state.images["high"] = high
                         except Exception as e:
                             st.warning(f"Could not fetch image from URL: {e}")
                     else:
                         st.info(f"Result {i}: Unrecognized response format.")
+                        img = None
+                    if img is not None:
+                        st.session_state.images["org"] = img
+                        low, med, high = PostProcessing.apply_post_processing(img)
+                        st.session_state.images["low"] = low
+                        st.session_state.images["medium"] = med
+                        st.session_state.images["high"] = high
+
+left, right = st.columns([6, 2], vertical_alignment="top")
+with right:
+    has_imgs = all(
+        k in st.session_state.images for k in ["org", "low", "medium", "high"]
+    )
+    if has_imgs:
+        with st.container(border=True):
+            # st.subheader("Edit your Image")
+            level = st.selectbox(
+                "Change Enhancement Level",
+                ["Low", "Medium", "High"],
+                key="enhancement_level",
+            )
+    else:
+        """"""
+with left:
+    if has_imgs:
+        c1, c2 = st.columns(2)
+
+        with c1:
+            org = st.session_state.images["org"]
+            st.image(org, caption="Original", width="stretch")
+            bufo = io.BytesIO()
+            org.save(bufo, format="PNG")
+            st.download_button(
+                "Download Original",
+                bufo.getvalue(),
+                file_name="napkin_original.png",
+                mime="image/png",
+                width="stretch",
+            )
+
+        with c2:
+            key_map = {"Low": "low", "Medium": "medium", "High": "high"}
+            chosen_key = st.session_state.enhancement_level
+            img = st.session_state.images[key_map[chosen_key]]
+
+            st.image(
+                img,
+                caption=f"Enhanced ({st.session_state.enhancement_level})",
+                width="stretch",
+            )
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            st.download_button(
+                "Download Enhanced",
+                buf.getvalue(),
+                file_name=f"napkin_{st.session_state.enhancement_level.lower()}_enhanced.png",
+                mime="image/png",
+                width="stretch",
+            )
+    else:
+        st.info("Generate an image to preview and download.")

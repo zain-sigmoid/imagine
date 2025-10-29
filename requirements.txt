@@ -6,3 +6,4 @@ PyYAML
 opencv-python-headless
 termcolor
 google
+google-genai
