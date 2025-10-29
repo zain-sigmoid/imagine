@@ -200,7 +200,7 @@ THEMES_PRESETS_MIN: Dict[str, Dict[str, Any]] = {
         "use_typography": "no",
         "typography_copy": "",
     },
-    "Backyard BBQs / Cookouts": {
+    "🍔 Backyard BBQs / Cookouts": {
         "motif": "grill silhouette with tongs",
         "background_treatment": "warm parchment wash",
         "base_tones": "warm ivory, parchment",
@@ -208,14 +208,14 @@ THEMES_PRESETS_MIN: Dict[str, Dict[str, Any]] = {
         "botanical_motifs": "rosemary sprigs",
         "theme_notes": "Casual outdoor vibe; avoid heavy smoke textures.",
     },
-    "Pool parties": {
+    "🏊‍♂️ Pool parties": {
         "motif": "retro pool float and wave line",
         "background_treatment": "aqua gradient wash",
         "base_tones": "pale aqua, porcelain",
         "accent_colors": "teal, sunshine yellow",
         "theme_notes": "Fresh, airy, light splash shapes only.",
     },
-    "Easter brunches": {
+    "🐣 Easter brunches": {
         "motif": "delicate egg motif with tiny florals",
         "background_treatment": "pastel blush wash",
         "base_tones": "blush, cream",
@@ -223,14 +223,14 @@ THEMES_PRESETS_MIN: Dict[str, Dict[str, Any]] = {
         "botanical_motifs": "tulips, lavender",
         "theme_notes": "Soft spring mood; keep corners empty.",
     },
-    "Halloween parties": {
+    "🎃 Halloween parties": {
         "motif": "minimal moon with tiny bats",
         "background_treatment": "soft charcoal fog (light)",
         "base_tones": "off-black, bone",
         "accent_colors": "pumpkin orange, antique gold",
         "theme_notes": "Keep spooky minimal; no blood or gore.",
     },
-    "New Year’s brunch": {
+    "🎉 New Year’s brunch": {
         "motif": "sparkler burst with star confetti",
         "background_treatment": "pearl sheen wash",
         "base_tones": "pearl, soft gray",
@@ -238,7 +238,7 @@ THEMES_PRESETS_MIN: Dict[str, Dict[str, Any]] = {
         "metallic_finish": "fine gold foil",
         "theme_notes": "Elevated celebration; crisp, high contrast.",
     },
-    "Farewell or promotion parties at work": {
+    "💼 Farewell or promotion parties at work": {
         "motif": "rising arrow ribbon with tiny stars",
         "background_treatment": "clean ivory wash",
         "base_tones": "ivory, pale stone",
