@@ -56,6 +56,28 @@ Return **only valid JSON**, no markdown. Use this exact schema:
 - If it **is** "Default", you must decide from the catalog (and vary across the 3 suggestions).
 """
 
+RATIONALE_PROMPT_TEMPLATE = """\
+You are an expert surface designer specializing in premium paper napkins and tableware aesthetics. 
+Given the following design combination, write a short rationale (2–4 sentences) explaining why this 
+combination works well together and what visual or emotional effect it creates. 
+Focus on harmony, balance, and design storytelling.
+
+Design Combination:
+- Color Palette: {color_palette}
+- Pattern: {pattern}
+- Motif: {motif}
+- Style: {style}
+- Finish: {finish}
+
+Guidelines:
+- Highlight how these elements complement one another (e.g., contrast, theme consistency, mood, season).
+- Avoid generic statements like “it looks nice together.”
+- Be specific but concise — keep it within 40 words.
+- Do not restate the parameters; explain the *why* and *effect*.
+- Output only the rationale text, no bullet points or extra formatting.
+
+"""
+
 
 class LLMCombiner:
     """
@@ -285,3 +307,30 @@ class GeminiClient:
 
         # Last resort
         return str(resp)
+
+    def ask_gemini(self, combination: Dict[Any], model: str = "gemini-2.0-flash"):
+        client = self.make_gemini_client()
+        try:
+            prompt = RATIONALE_PROMPT_TEMPLATE.format(
+                color_palette=combination["color_palette"],
+                pattern=combination["pattern"],
+                motif=combination["motif"],
+                style=combination["style"],
+                finish=combination["finish"],
+            )
+            resp = client.models.generate_content(model=model, contents=prompt)
+            if hasattr(resp, "text") and resp.text:
+                return resp.text.strip()
+
+            # Fallback: try candidates[0].content.parts text
+            try:
+                parts = resp.candidates[0].content.parts
+                texts = [p.text for p in parts if hasattr(p, "text")]
+                if texts:
+                    return " ".join(texts).strip()
+            except Exception:
+                pass
+
+            return "Could not generate"
+        except Exception:
+            return "Could not generate"
