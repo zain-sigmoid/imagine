@@ -1,6 +1,5 @@
 import os
 import io
-import requests
 import logging
 from dotenv import load_dotenv
 import streamlit as st
@@ -8,11 +7,9 @@ from PIL import Image
 from pathlib import Path
 from openai import OpenAI
 from typing import Dict, Any, Optional
-from termcolor import cprint
 from core.utils import Utility
 from core.postprocessing import PostProcessing
 from core.model import Imagine
-from core.prompt_store import init_db, save_prompt, get_recent_prompts
 from core.themes import THEMES_PRESETS_MIN, DEFAULTS
 from core.options import Options
 from core.llm_combiner import LLMCombiner, GeminiClient
@@ -43,7 +40,6 @@ st.title("🎨 Premium Paper Napkin — Theme-led Generator")
 st.caption(
     "Pick a theme, choose render settings, (optionally) add extra art direction."
 )
-init_db()
 
 if not API_KEY:
     st.warning("Set OPENAI_API_KEY in your environment or .env file.", icon="⚠️")
@@ -283,7 +279,7 @@ with right:
         )[
             :5
         ]  # latest 5
-        with st.container():
+        with st.container(border=True):
             st.subheader("🖼️ Previous Images")
             # Render in rows, 2 columns per row
             for i in range(0, len(image_files), 2):
@@ -292,20 +288,34 @@ with right:
                 img_path_1 = os.path.join(output_folder, image_files[i])
                 with cols[0]:
                     st.image(Image.open(img_path_1), width=thumb_w)
-                    st.button(
-                        "Use", key=f"use_{i}", on_click=set_org, args=(img_path_1,)
-                    )
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.button(
+                            "Use",
+                            key=f"use_{i}",
+                            on_click=set_org,
+                            args=(img_path_1,),
+                        )
+                    with col2:
+                        st.button("🗑️", key=f"delete_{i}", help="Delete")
 
                 if i + 1 < len(image_files):
                     img_path_2 = os.path.join(output_folder, image_files[i + 1])
                     with cols[1]:
                         st.image(Image.open(img_path_2), width=thumb_w)
-                        st.button(
-                            "Use",
-                            key=f"use_{i+1}",
-                            on_click=set_org,
-                            args=(img_path_2,),
-                        )
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.button(
+                                "Use",
+                                key=f"use_{i+1}",
+                                on_click=set_org,
+                                args=(img_path_1,),
+                            )
+                        with col2:
+                            st.button(
+                                "🗑️",
+                                key=f"delete_{i+1}",
+                            )
     else:
         st.info("No previous images found yet.")
 
@@ -433,7 +443,6 @@ if submitted:
             n_total = len(designs_to_run)
 
             for idx, dsn in enumerate(designs_to_run, start=1):
-                rprint(f"ruuning for design:{dsn}")
                 final_prompt = build_napkin_prompt(
                     theme_key=theme_key, design=dsn, extra=extra
                 )
