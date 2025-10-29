@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import os
 import io
 import base64
+import json
 from PIL import Image
 import requests
 import logging
@@ -190,6 +191,33 @@ class Imagine:
             r.raise_for_status()
             return r.content
         return None
+
+    @staticmethod
+    def save_image_with_metadata(
+        img,
+        save_path: str,
+        combination: dict,
+        json_path: str = "outputs/image_metadata.json",
+    ):
+        """
+        Save image to disk and store its combination metadata in a JSON file.
+        """
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        img.save(save_path)
+
+        # Load existing metadata if present
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+
+        # Save metadata using image path as key
+        metadata[save_path] = combination
+
+        # Write back to JSON
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
 
 
 class Generate:
