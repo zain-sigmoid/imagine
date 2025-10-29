@@ -1,27 +1,20 @@
 import os
 import io
-import requests
 import logging
 from dotenv import load_dotenv
 import streamlit as st
 from PIL import Image
 from pathlib import Path
 from openai import OpenAI
-from typing import Dict, Any, Optional
-from termcolor import cprint
+from typing import Dict, Any
 from core.utils import Utility
 from core.postprocessing import PostProcessing
-from core.model import Imagine, Edit
-from core.prompt_store import init_db, save_prompt, get_recent_prompts
-from core.themes import THEMES_PRESETS_MIN, DEFAULTS
+from core.model import Imagine, Edit, Generate
 from core.options import Options
 from core.llm_combiner import LLMCombiner, GeminiClient
 from google import genai
-from google.genai import types
 from io import BytesIO
 from datetime import datetime
-import pandas as pd
-from rich import print as rprint
 
 # =========================================================
 # Setup
@@ -43,7 +36,6 @@ st.title("🎨 Premium Paper Napkin — Theme-led Generator")
 st.caption(
     "Pick a theme, choose render settings, (optionally) add extra art direction."
 )
-init_db()
 
 if not API_KEY:
     st.warning("Set OPENAI_API_KEY in your environment or .env file.", icon="⚠️")
@@ -76,87 +68,6 @@ NAPKIN_TEMPLATE = Utility.load_template()
 # =========================================================
 # Prompt builder helpers
 # =========================================================
-class _SafeDict(dict):
-    def __missing__(self, key):
-        return ""
-
-
-def _safe_clean(d: Dict[str, Any]) -> Dict[str, Any]:
-    out = {}
-    for k, v in d.items():
-        if v is None:
-            out[k] = ""
-        elif isinstance(v, (list, tuple, set)):
-            out[k] = ", ".join(map(str, v))
-        else:
-            out[k] = str(v)
-    return out
-
-
-def _apply_design_overrides(
-    base: Dict[str, Any], design: Optional[Dict[str, Any]]
-) -> Dict[str, Any]:
-    """
-    design may contain up to 5 user options:
-      - color_palette: dict with 'base' and/or 'accent' (or a string)
-      - pattern: string -> maps to background_library and (if empty) background_treatment
-      - motif: string -> overrides motif
-      - style: string -> overrides illustration_style
-      - finish: string -> overrides finish_spec; if it mentions foil/metal, also metallic_finish
-    """
-    if not design:
-        return base
-
-    if "motif" in design and design["motif"]:
-        base["motif"] = design["motif"]
-
-    if "style" in design and design["style"]:
-        base["illustration_style"] = design["style"]
-
-    if "pattern" in design and design["pattern"]:
-        base["background_library"] = design["pattern"]
-        # fall back to same text as background_treatment if not explicitly set
-        base.setdefault("background_treatment", design["pattern"])
-
-    if "color_palette" in design and design["color_palette"]:
-        cp = design["color_palette"]
-        if isinstance(cp, dict):
-            if cp.get("base"):
-                base["base_tones"] = cp["base"]
-            if cp.get("accent"):
-                base["accent_colors"] = cp["accent"]
-        else:
-            # if string, put everything into base_tones
-            base["base_tones"] = cp
-
-    if "finish" in design and design["finish"]:
-        fin = str(design["finish"])
-        base["finish_spec"] = fin
-        if any(word in fin.lower() for word in ("foil", "metal", "gold", "silver")):
-            base["metallic_finish"] = fin
-
-    return base
-
-
-def build_napkin_prompt(
-    theme_key: str, extra: str = "", design: Optional[Dict[str, Any]] = None
-) -> str:
-    # start from global defaults, then theme preset
-    if theme_key not in THEMES_PRESETS_MIN:
-        raise KeyError(f"Unknown theme: {theme_key}")
-
-    base = {**DEFAULTS, **THEMES_PRESETS_MIN[theme_key]}
-    base["theme_label"] = theme_key
-    base["extra"] = (extra or "").strip() or "—"
-
-    base = _apply_design_overrides(base, design)
-
-    # finalize
-    text = NAPKIN_TEMPLATE.format_map(_SafeDict(_safe_clean(base)))
-    # collapse whitespace to keep prompt tidy
-    return " ".join(text.split())
-
-
 def set_org(path: str):
     with Image.open(path) as im:
         original = im.convert("RGBA").copy()
@@ -179,6 +90,29 @@ def set_org(path: str):
     st.session_state["enhancement_level_combo_0"] = st.session_state.get(
         "enhancement_level", "Low"
     )
+
+
+def delete_image(path: str):
+    """Delete image file from disk (safety checks) and rerun."""
+    try:
+        # safety: only delete inside outputs/now and image extensions
+        allowed = (".png", ".jpg", ".jpeg", ".webp")
+        if not path.startswith(os.path.abspath(output_folder)):
+            st.warning("Refusing to delete outside the allowed folder.")
+            return
+        if not path.lower().endswith(allowed):
+            st.warning("Refusing to delete non-image file.")
+            return
+        if os.path.exists(path):
+            os.remove(path)
+            st.toast("Image deleted.", icon="🗑️")
+            logger.info(f"Image Deleted on path:{path}")
+            st.rerun()
+        else:
+            st.info("File already removed.")
+    except Exception as e:
+        st.error(f"Could not delete image: {e}")
+        logger.error(f"Could not delete image: {e}")
 
 
 def select_with_default(label: str, values: list[str], key: str):
@@ -216,12 +150,12 @@ def _strip_defaults(values: Dict[str, Any]) -> Dict[str, str]:
 # Layout: left (form/results) | right (recents)
 # =========================================================
 themes = [
-    "Backyard BBQs / Cookouts",
-    "Pool parties",
-    "Easter brunches",
-    "Halloween parties",
-    "New Year’s brunch",
-    "Farewell or promotion parties at work",
+    "🍔 Backyard BBQs / Cookouts",
+    "🏊‍♂️ Pool parties",
+    "🐣 Easter brunches",
+    "🎃 Halloween parties",
+    "🎉 New Year’s brunch",
+    "💼 Farewell or promotion parties at work",
 ]
 left, right = st.columns([6, 2], vertical_alignment="top")
 with left:
@@ -230,7 +164,9 @@ with left:
         theme_key = st.selectbox("Theme", themes, index=0)
 
         st.markdown("### Render Settings")
-        option = st.selectbox("Choose Enhancement Level:", ["Low", "Medium", "High"])
+        option = st.selectbox(
+            "Choose Enhancement Level:", ["🌙 Low", "🔆 Medium", "🌟 High"]
+        )
         opt = Options()
         st.subheader("Design Options")
         st.badge(
@@ -278,12 +214,18 @@ with left:
             height=80,
         )
 
-        submitted = st.form_submit_button("Generate", width="stretch")
+        st.write("")
+        submitted = st.form_submit_button(
+            "Generate",
+            width="content",
+            icon="⚙️",
+            help="click to generate Image",
+        )
     gallery = st.empty()
 
 with right:
     output_folder = "outputs/now"
-    thumb_w = 120
+    thumb_w = 115
     if os.path.exists(output_folder):
         # Get all image files (sorted by latest)
         image_files = sorted(
@@ -297,29 +239,37 @@ with right:
         )[
             :5
         ]  # latest 5
-        with st.container():
+        with st.container(border=True):
             st.subheader("🖼️ Previous Images")
-            # Render in rows, 2 columns per row
-            for i in range(0, len(image_files), 2):
-                cols = st.columns(2)
-                # First image in the row
-                img_path_1 = os.path.join(output_folder, image_files[i])
-                with cols[0]:
-                    st.image(Image.open(img_path_1), width=thumb_w)
-                    st.button(
-                        "Use", key=f"use_{i}", on_click=set_org, args=(img_path_1,)
-                    )
+            for i, fname in enumerate(image_files):
+                img_path = os.path.join(output_folder, fname)
+                col_img, col_btns = st.columns(
+                    [1.5, 0.5]
+                )  # left: image, right: buttons
 
-                if i + 1 < len(image_files):
-                    img_path_2 = os.path.join(output_folder, image_files[i + 1])
-                    with cols[1]:
-                        st.image(Image.open(img_path_2), width=thumb_w)
-                        st.button(
-                            "Use",
-                            key=f"use_{i+1}",
-                            on_click=set_org,
-                            args=(img_path_2,),
-                        )
+                with col_img:
+                    try:
+                        st.image(Image.open(img_path), width=thumb_w)
+                    except Exception as e:
+                        st.warning(f"Could not open {fname}: {e}")
+
+                with col_btns:
+                    st.button(
+                        "Use",
+                        key=f"use_{i}",
+                        on_click=set_org,
+                        args=(img_path,),
+                        width="stretch",
+                        help="Use",
+                    )
+                    st.button(
+                        "🗑️",
+                        key=f"del_{i}",
+                        on_click=delete_image,
+                        args=(os.path.abspath(img_path),),
+                        width="stretch",
+                        help="Delete",
+                    )
     else:
         st.info("No previous images found yet.")
 
@@ -331,71 +281,13 @@ with right:
 if "combiner" not in st.session_state:
     st.session_state.combiner = LLMCombiner(llm_fn=gemini_client.gemini_call)
 
-# If Top-3 button was pressed
-# if "gen_top3" in locals() and gen_top3:
-#     with st.spinner("Generating Combinations"):
-#         combos = st.session_state.combiner.generate(selections, catalog)
-#         st.session_state["last_llm_combinations"] = combos
-#         st.rerun()
-
 
 def _slug(s: str) -> str:
     return "".join(c.lower() if c.isalnum() else "_" for c in s).strip("_")
 
 
-def _gen_one_image(prompt: str):
-    """
-    Calls the image model and returns a tuple of (original_image, enhanced_variants).
-    enhanced_variants is a dict with keys low/medium/high or None on failure.
-    """
-    try:
-        # --- Gemini image generation ---
-        resp = client_gemini.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=[prompt],
-        )
-        candidates = getattr(resp, "candidates", []) or []
-        for candidate in candidates:
-            parts = getattr(candidate, "content", getattr(candidate, "contents", None))
-            parts = getattr(parts, "parts", []) if parts is not None else []
-            for part in parts:
-                if part.inline_data is None:
-                    continue
-                img = Image.open(BytesIO(part.inline_data.data)).convert("RGBA")
-                low, medium, high = PostProcessing.apply_post_processing(img)
-                return img, {"low": low, "medium": medium, "high": high}
-        return None, None
-
-    except Exception as e:
-        st.warning(f"Could not generate image: {e}")
-        return None, None
-
-
-def _gen_mock_image(index: int):
-    """
-    Function to retun mock images to test the UI instead of generating images repeatedly
-    """
-    folder = "outputs/now"
-    image_files = sorted(
-        [
-            f
-            for f in os.listdir(folder)
-            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
-        ],
-        key=lambda x: os.path.getmtime(os.path.join(folder, x)),
-        reverse=True,
-    )[:3]
-    index = index - 1
-    print(image_files, len(image_files), index)
-    img_path = os.path.join(folder, image_files[index])
-    img = Image.open(img_path).convert("RGBA")
-    if img is not None:
-        low, medium, high = PostProcessing.apply_post_processing(img)
-        return img, {"low": low, "medium": medium, "high": high}
-    return None, None
-
-
 if submitted:
+    gen = Generate()
     if not client:
         logger.error("OPEN AI KEY Missing")
         st.info("OPENAI_API_KEY is not set. Please add it and try again.")
@@ -431,9 +323,7 @@ if submitted:
         logger.info(f"Generating {len(designs_to_run)} prompt(s) & image(s).")
         os.makedirs("outputs/now", exist_ok=True)
         theme_slug = _slug(theme_key)
-        # final_prompt = build_napkin_prompt(
-        #     theme_key=theme_key, design=design, extra=extra
-        # )
+
         with st.spinner("Generating Image"):
             # Optional: show progress if multiple
             progress = st.empty()
@@ -441,12 +331,13 @@ if submitted:
 
             for idx, combo in enumerate(designs_to_run, start=1):
                 prompt_design = _strip_defaults(combo)
-                final_prompt = build_napkin_prompt(
+                final_prompt = Imagine.build_napkin_prompt(
                     theme_key=theme_key, design=prompt_design, extra=extra
                 )
 
-                img, variants = _gen_one_image(final_prompt)
-                # img, variants = _gen_mock_image(idx)
+                img, variants = gen.generate_with_gemini(final_prompt)
+                # img, variants = gen.generate_with_openai(final_prompt)
+                # img, variants = gen.generate_mock_image(index=idx)
                 if img is None or variants is None:
                     st.info(f"No image returned for combo {idx}.")
                     continue
@@ -480,83 +371,6 @@ if submitted:
             st.warning(
                 "No images were generated. Please adjust your prompt and try again."
             )
-        # with st.spinner("Generating..."):
-        #     model_name = "dall-e-3"
-        #     gen_kwargs = {
-        #         "model": model_name,
-        #         "prompt": final_prompt,
-        #         "size": "1024x1024",
-        #         "quality": "hd",
-        #     }
-        #     try:
-        #         # resp = client.images.generate(**gen_kwargs)
-        #         resp = client_gemini.models.generate_content(
-        #             model="gemini-2.5-flash-image",
-        #             contents=[final_prompt],
-        #             config=types.GenerateContentConfig(
-        #                 response_modalities=["IMAGE"],
-        #             ),
-        #         )
-        #         cprint(resp, "yellow")
-        #         for part in resp.candidates[0].content.parts:
-        #             if part.text is not None:
-        #                 print(part.text)
-        #             elif part.inline_data is not None:
-        #                 img = Image.open(BytesIO(part.inline_data.data))
-        #                 if img is not None:
-        #                     st.session_state.images["org"] = img
-        #                     low, med, high = PostProcessing.apply_post_processing(img)
-        #                     st.session_state.images["low"] = low
-        #                     st.session_state.images["medium"] = med
-        #                     st.session_state.images["high"] = high
-        #                     os.makedirs("outputs/now", exist_ok=True)
-        #                     filename = (
-        #                         f"napkin_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        #                     )
-        #                     save_path = os.path.join("outputs/now", filename)
-
-        #                     # save
-        #                     img.save(save_path)
-        #                     st.success("Image saved")
-        #         # resp = Imagine.mock_response_from_file(path="demo/napkin_original.png")
-        #     except Exception as e:
-        #         st.info(f"Could not generate the image")
-        #         logger.error(f"Error Occurred while generating:{e}")
-        #         resp = None
-
-        # if not resp or not getattr(resp, "data", None):
-        #     st.info("No image returned.")
-        # else:
-        #     with gallery.container():
-        #         for i, item in enumerate(resp.data, start=1):
-        #             if getattr(item, "b64_json", None):
-        #                 img = Imagine.b64_to_image(item.b64_json)
-        #             elif getattr(item, "url", None):
-        #                 try:
-        #                     cprint("Fetching image from URL:", "yellow")
-        #                     resp = requests.get(item.url, timeout=10)
-        #                     resp.raise_for_status()
-        #                     img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-        #                 except Exception as e:
-        #                     st.warning(f"Could not fetch image from URL: {e}")
-        #             else:
-        #                 st.info(f"Result {i}: Unrecognized response format.")
-        #                 img = None
-        #             if img is not None:
-        #                 st.session_state.images["org"] = img
-        #                 low, med, high = PostProcessing.apply_post_processing(img)
-        #                 st.session_state.images["low"] = low
-        #                 st.session_state.images["medium"] = med
-        #                 st.session_state.images["high"] = high
-        #                 os.makedirs("outputs/now", exist_ok=True)
-        #                 filename = (
-        #                     f"napkin_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        #                 )
-        #                 save_path = os.path.join("outputs/now", filename)
-
-        #                 # save
-        #                 img.save(save_path)
-        #                 st.success("Image saved")
 
 left, right = st.columns([6, 2], vertical_alignment="top")
 with right:
@@ -707,6 +521,7 @@ with left:
                     file_name=f"napkin_combo{idx + 1}_original.png",
                     mime="image/png",
                     key=f"{idx}_org",
+                    icon="⬇️",
                 )
 
             with cols[1]:
@@ -726,6 +541,7 @@ with left:
                     file_name=f"napkin_combo{idx + 1}_{chosen_level.lower()}_enhanced.png",
                     mime="image/png",
                     key=f"{idx}_enh",
+                    icon="⬇️",
                 )
 
             if edited_img:
@@ -739,6 +555,7 @@ with left:
                         file_name=f"napkin_combo{idx + 1}_edited.png",
                         mime="image/png",
                         key=f"{idx}_edt",
+                        icon="⬇️",
                     )
 
             if idx < len(image_sets) - 1:
