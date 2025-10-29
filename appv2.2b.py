@@ -1,6 +1,9 @@
 import os
 import io
 import logging
+import re
+import json
+import time
 from dotenv import load_dotenv
 import streamlit as st
 from PIL import Image
@@ -13,7 +16,6 @@ from core.model import Imagine, Edit, Generate
 from core.options import Options
 from core.llm_combiner import LLMCombiner, GeminiClient
 from google import genai
-from io import BytesIO
 from datetime import datetime
 
 # =========================================================
@@ -69,17 +71,33 @@ NAPKIN_TEMPLATE = Utility.load_template()
 # Prompt builder helpers
 # =========================================================
 def set_org(path: str):
+    json_path = "outputs/image_metadata.json"
     with Image.open(path) as im:
         original = im.convert("RGBA").copy()
 
+    if os.path.exists(json_path):
+        with open(json_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+    else:
+        metadata = {}
     low, medium, high = PostProcessing.apply_post_processing(original)
+    prompt = f"Generate a one-line rationale for the image named '{Path(path).name}'"
+    data = metadata.get(path, {})
+    combo = {
+        "color_palette": data.get("color_palette"),
+        "pattern": data.get("pattern"),
+        "motif": data.get("motif"),
+        "style": data.get("style"),
+        "finish": data.get("finish"),
+    }
+    rationale = data.get("rationale")
     st.session_state.image_sets = [
         {
             "original": original,
             "enhanced": {"low": low, "medium": medium, "high": high},
             "edited": None,
-            "combo": {"rationale": f"Loaded from {Path(path).name}"},
-            "prompt": "",
+            "combo": {**combo, "rationale": rationale},
+            "prompt": prompt,
         }
     ]
     st.session_state.last_llm_combinations = []
@@ -106,8 +124,7 @@ def delete_image(path: str):
         if os.path.exists(path):
             os.remove(path)
             st.toast("Image deleted.", icon="🗑️")
-            logger.info(f"Image Deleted on path:{path}")
-            st.rerun()
+            logger.info(f"Image Deleted Successfully")
         else:
             st.info("File already removed.")
     except Exception as e:
@@ -315,9 +332,12 @@ if submitted:
             designs_to_run = combos
         else:
             user_combo = {k: design[k] for k in ATTR_KEYS}
+            rationale = gemini_client.ask_gemini(user_combo)
+            time.sleep(2)
             st.session_state["last_llm_combinations"] = [
-                {**user_combo, "rationale": "User-selected combination"}
+                {**user_combo, "rationale": rationale}
             ]
+            user_combo["rationale"] = rationale if rationale else ""
             designs_to_run = [user_combo]
 
         logger.info(f"Generating {len(designs_to_run)} prompt(s) & image(s).")
@@ -348,7 +368,10 @@ if submitted:
                 short_spec = _slug("-".join(spec_parts))[:60]
                 filename = f"napkin_{theme_slug}_c{idx}_{stamp}_{short_spec}.png"
                 save_path = os.path.join("outputs/now", filename)
-                img.save(save_path)
+                comb_dict = combo if combos else user_combo
+                Imagine.save_image_with_metadata(
+                    img=img, save_path=save_path, combination=comb_dict
+                )
 
                 combo_idx = len(st.session_state.image_sets)
                 st.session_state.image_sets.append(
