@@ -4,7 +4,6 @@ venv/
 
 # Environment variables
 .env
-.env.*
 
 # OS-specific files
 .DS_Store
@@ -16,6 +15,10 @@ __pycache__/
 *.py[cod]
 
 imagine-code.zip
+ADE_Experiment.ipynb
+extra.py
+image_generation_loop.ipynb
+parsed_doc.json
 GIFTING & HOLIDAY_TRENDS_FINAL_CLIENT PRES_082025_MICHAELS_2026  (2).pdf
 generated_standrd.png
 imagine-code/
