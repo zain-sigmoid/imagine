@@ -1,10 +1,10 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict, List, Optional, Tuple
 import json
 import random
 import os
 from typing import Optional
 from google import genai
+from typing import Any, Callable, Dict, List, Optional
 
 Json = Dict[str, Any]
 LLMFn = Callable[[str], str]  # (prompt) -> raw_text_response

@@ -7,14 +7,24 @@ from PIL import Image
 import requests
 import logging
 from google import genai
+from openai import OpenAI
 from io import BytesIO
 from core.postprocessing import PostProcessing
 from google.genai import types
+from typing import Dict, Any, Optional
+from core.themes import THEMES_PRESETS_MIN, DEFAULTS
+from core.utils import Utility
 
 STRENGTH_INDEX = {"Light": 0, "Medium": 1, "Strong": 2}
+NAPKIN_TEMPLATE = Utility.load_template()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s | %(message)s")
 logger = logging.getLogger(__name__)
+
+
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return ""
 
 
 class Imagine:
@@ -29,6 +39,82 @@ class Imagine:
                 f"Avoid text, watermarks, signatures, borders."
             )
         return subject
+
+    @staticmethod
+    def _safe_clean(d: Dict[str, Any]) -> Dict[str, Any]:
+        out = {}
+        for k, v in d.items():
+            if v is None:
+                out[k] = ""
+            elif isinstance(v, (list, tuple, set)):
+                out[k] = ", ".join(map(str, v))
+            else:
+                out[k] = str(v)
+        return out
+
+    @staticmethod
+    def _apply_design_overrides(
+        base: Dict[str, Any], design: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        design may contain up to 5 user options:
+        - color_palette: dict with 'base' and/or 'accent' (or a string)
+        - pattern: string -> maps to background_library and (if empty) background_treatment
+        - motif: string -> overrides motif
+        - style: string -> overrides illustration_style
+        - finish: string -> overrides finish_spec; if it mentions foil/metal, also metallic_finish
+        """
+        if not design:
+            return base
+
+        if "motif" in design and design["motif"]:
+            base["motif"] = design["motif"]
+
+        if "style" in design and design["style"]:
+            base["illustration_style"] = design["style"]
+
+        if "pattern" in design and design["pattern"]:
+            base["background_library"] = design["pattern"]
+            # fall back to same text as background_treatment if not explicitly set
+            base.setdefault("background_treatment", design["pattern"])
+
+        if "color_palette" in design and design["color_palette"]:
+            cp = design["color_palette"]
+            if isinstance(cp, dict):
+                if cp.get("base"):
+                    base["base_tones"] = cp["base"]
+                if cp.get("accent"):
+                    base["accent_colors"] = cp["accent"]
+            else:
+                # if string, put everything into base_tones
+                base["base_tones"] = cp
+
+        if "finish" in design and design["finish"]:
+            fin = str(design["finish"])
+            base["finish_spec"] = fin
+            if any(word in fin.lower() for word in ("foil", "metal", "gold", "silver")):
+                base["metallic_finish"] = fin
+
+        return base
+
+    @staticmethod
+    def build_napkin_prompt(
+        theme_key: str, extra: str = "", design: Optional[Dict[str, Any]] = None
+    ) -> str:
+        # start from global defaults, then theme preset
+        if theme_key not in THEMES_PRESETS_MIN:
+            raise KeyError(f"Unknown theme: {theme_key}")
+
+        base = {**DEFAULTS, **THEMES_PRESETS_MIN[theme_key]}
+        base["theme_label"] = theme_key
+        base["extra"] = (extra or "").strip() or "—"
+
+        base = Imagine._apply_design_overrides(base, design)
+
+        # finalize
+        text = NAPKIN_TEMPLATE.format_map(_SafeDict(Imagine._safe_clean(base)))
+        # collapse whitespace to keep prompt tidy
+        return " ".join(text.split())
 
     @staticmethod
     def mock_response_from_file(path: str):
@@ -46,6 +132,13 @@ class Imagine:
     def b64_to_image(b64_str: str) -> Image.Image:
         img_bytes = base64.b64decode(b64_str)
         return Image.open(io.BytesIO(img_bytes)).convert("RGBA")
+
+    @staticmethod
+    def image_to_base64(img_path):
+        """Convert image to base64 for inline display."""
+        with open(img_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode("utf-8")
 
     @staticmethod
     def ensure_mode_rgba(img: Image.Image) -> Image.Image:
@@ -97,6 +190,119 @@ class Imagine:
             r.raise_for_status()
             return r.content
         return None
+
+
+class Generate:
+    def __init__(
+        self,
+    ):
+        pass
+
+    def generate_with_openai(self, final_prompt: str, model_name: str = "dall-e-3"):
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return {
+                "status": False,
+                "type": "Key Error",
+                "msg": "GEMINI_API_KEY is not set.",
+            }
+        client = OpenAI(api_key=api_key) if api_key else None
+        gen_kwargs = {
+            "model": model_name,
+            "prompt": final_prompt,
+            "size": "1024x1024",
+            "quality": "hd",
+        }
+        try:
+            resp = client.images.generate(**gen_kwargs)
+        except Exception as e:
+            logger.error(f"Error Occurred while generating:{e}")
+            return None, None
+        if not resp or not getattr(resp, "data", None):
+            return None, None
+        else:
+            for i, item in enumerate(resp.data, start=1):
+                if getattr(item, "b64_json", None):
+                    img = Imagine.b64_to_image(item.b64_json)
+                elif getattr(item, "url", None):
+                    try:
+                        logger.info("Fetching image from URL")
+                        resp = requests.get(item.url, timeout=10)
+                        resp.raise_for_status()
+                        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    except Exception as e:
+                        logger.warning(f"Could not fetch image from URL: {e}")
+                        return None, None
+                else:
+                    logger.info(f"Result {i}: Unrecognized response format.")
+                    return None, None
+                if img is not None:
+                    logger.info("Image generated successfully")
+                    low, med, high = PostProcessing.apply_post_processing(img)
+                    return img, {"low": low, "medium": med, "high": high}
+
+    def generate_with_gemini(
+        self,
+        prompt: str,
+    ):
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        if not GEMINI_API_KEY:
+            return {
+                "status": False,
+                "type": "Key Error",
+                "msg": "GEMINI_API_KEY is not set.",
+            }
+        client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+        """
+        Calls the image model and returns a tuple of (original_image, enhanced_variants).
+        enhanced_variants is a dict with keys low/medium/high or None on failure.
+        """
+        try:
+            # --- Gemini image generation ---
+            resp = client_gemini.models.generate_content(
+                model="gemini-2.5-flash-image",
+                contents=[prompt],
+            )
+            candidates = getattr(resp, "candidates", []) or []
+            for candidate in candidates:
+                parts = getattr(
+                    candidate, "content", getattr(candidate, "contents", None)
+                )
+                parts = getattr(parts, "parts", []) if parts is not None else []
+                for part in parts:
+                    if part.inline_data is None:
+                        continue
+                    img = Image.open(BytesIO(part.inline_data.data)).convert("RGBA")
+                    low, medium, high = PostProcessing.apply_post_processing(img)
+                    return img, {"low": low, "medium": medium, "high": high}
+            return None, None
+
+        except Exception as e:
+            logger.warning(f"Could not generate image: {e}")
+            return None, None
+
+    def generate_mock_image(
+        self, index: int, folder: str = "outputs/now", count: int = 3
+    ) -> tuple[str, Dict]:
+        """
+        Function to retun mock images to test the UI instead of generating images repeatedly
+        """
+        image_files = sorted(
+            [
+                f
+                for f in os.listdir(folder)
+                if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+            ],
+            key=lambda x: os.path.getmtime(os.path.join(folder, x)),
+            reverse=True,
+        )[:count]
+        index = index - 1
+        img_path = os.path.join(folder, image_files[index])
+        img = Image.open(img_path).convert("RGBA")
+        if img is not None:
+            low, medium, high = PostProcessing.apply_post_processing(img)
+            return img, {"low": low, "medium": medium, "high": high}
+        return None, None
 
 
 class Edit:
