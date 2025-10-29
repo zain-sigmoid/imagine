@@ -110,9 +110,25 @@ def set_org(path: str):
     )
 
 
-def delete_image(path: str):
+def remove_metadata_entry(image_path: str, json_path: str):
+    """Remove a specific image entry from metadata.json."""
+    if not os.path.exists(json_path):
+        return
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
+    if image_path in metadata:
+        del metadata[image_path]
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+
+def delete_image(path: str, img_path: str):
     """Delete image file from disk (safety checks) and rerun."""
     try:
+        json_path = "outputs/image_metadata.json"
         # safety: only delete inside outputs/now and image extensions
         allowed = (".png", ".jpg", ".jpeg", ".webp")
         if not path.startswith(os.path.abspath(output_folder)):
@@ -123,6 +139,7 @@ def delete_image(path: str):
             return
         if os.path.exists(path):
             os.remove(path)
+            remove_metadata_entry(img_path, json_path)
             st.toast("Image deleted.", icon="🗑️")
             logger.info(f"Image Deleted Successfully")
         else:
@@ -283,7 +300,7 @@ with right:
                         "🗑️",
                         key=f"del_{i}",
                         on_click=delete_image,
-                        args=(os.path.abspath(img_path),),
+                        args=(os.path.abspath(img_path), img_path),
                         width="stretch",
                         help="Delete",
                     )
