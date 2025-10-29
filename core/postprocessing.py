@@ -2,6 +2,10 @@
 import cv2
 import numpy as np
 from PIL import Image
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s | %(message)s")
+logger = logging.getLogger(__name__)
 
 
 class PostProcessing:
@@ -47,7 +51,7 @@ class PostProcessing:
         Safer enhancer for watercolor/foil napkins.
         strength: 'low' | 'medium' | 'high' (medium is recommended)
         """
-        print(f"PostProcessing: enhancing with strength={strength}")
+        logger.info(f"PostProcessing: enhancing with strength={strength}")
         # Params tuned for watercolor; adjust if needed
         cfg = {
             "low": dict(
@@ -89,7 +93,6 @@ class PostProcessing:
 
         # 5) Final clamp and return
         rgb = np.clip(rgb, 0, 255).astype(np.uint8)
-        print("PostProcessing: enhancement done.")
         return Image.fromarray(rgb)
 
     @staticmethod
