@@ -18,6 +18,8 @@ from core.llm_combiner import LLMCombiner, GeminiClient
 from google import genai
 from datetime import datetime
 
+# from termcolor import cprint
+
 # =========================================================
 # Setup
 # =========================================================
@@ -129,6 +131,7 @@ def delete_image(path: str, img_path: str):
     """Delete image file from disk (safety checks) and rerun."""
     try:
         json_path = "outputs/image_metadata.json"
+        output_folder = "outputs/now"
         # safety: only delete inside outputs/now and image extensions
         allowed = (".png", ".jpg", ".jpeg", ".webp")
         if not path.startswith(os.path.abspath(output_folder)):
@@ -184,128 +187,126 @@ def _strip_defaults(values: Dict[str, Any]) -> Dict[str, str]:
 # Layout: left (form/results) | right (recents)
 # =========================================================
 themes = [
-    "🍔 Backyard BBQs / Cookouts",
-    "🏊‍♂️ Pool parties",
-    "🐣 Easter brunches",
+    # "🍔 Backyard BBQs / Cookouts",
+    # "🏊‍♂️ Pool parties",
+    # "🐣 Easter brunches",
     "🎃 Halloween parties",
     "🎉 New Year’s brunch",
-    "💼 Farewell or promotion parties at work",
+    # "💼 Farewell or promotion parties at work",
 ]
 left, right = st.columns([6, 2], vertical_alignment="top")
-with left:
-    with st.form("gen"):
-        st.markdown("### Design Theme")
-        theme_key = st.selectbox("Theme", themes, index=0)
+with st.form("gen"):
+    st.markdown("### Design Theme")
+    theme_key = st.selectbox("Theme", themes, index=0)
 
-        st.markdown("### Render Settings")
-        option = st.selectbox(
-            "Choose Enhancement Level:", ["🌙 Low", "🔆 Medium", "🌟 High"]
+    # st.markdown("### Render Settings")
+    # option = st.selectbox(
+    #     "Choose Enhancement Level:", ["🌙 Low", "🔆 Medium", "🌟 High"]
+    # )
+    option = "high"
+    opt = Options()
+    st.subheader("Design Options")
+    st.badge(
+        "Default will choose three best combination from the drop down",
+        icon="🚨",
+        color="gray",
+    )
+    r1, r2, r3, r4, r5 = st.columns(5)
+    with r1:
+        sel_palette = select_with_default(
+            "Color Palette", list(opt.color_palettes), "sel_palette"
         )
-        opt = Options()
-        st.subheader("Design Options")
-        st.badge(
-            "Default will choose three best combination from the drop down",
-            icon="🚨",
-            color="gray",
-        )
-        r1, r2, r3, r4, r5 = st.columns(5)
-        with r1:
-            sel_palette = select_with_default(
-                "Color Palette", list(opt.color_palettes), "sel_palette"
-            )
-        with r2:
-            sel_pattern = select_with_default(
-                "Pattern", list(opt.patterns), "sel_pattern"
-            )
-        with r3:
-            sel_motif = select_with_default("Motif", list(opt.motifs), "sel_motif")
-        with r4:
-            sel_theme = select_with_default("Style", list(opt.themes), "sel_style")
-        with r5:
-            sel_finish = select_with_default("Finish", list(opt.finishes), "sel_finish")
+    with r2:
+        sel_pattern = select_with_default("Pattern", list(opt.patterns), "sel_pattern")
+    with r3:
+        sel_motif = select_with_default("Motif", list(opt.motifs), "sel_motif")
+    with r4:
+        sel_theme = select_with_default("Style", list(opt.themes), "sel_style")
+    with r5:
+        sel_finish = select_with_default("Finish", list(opt.finishes), "sel_finish")
 
-        selections = {
-            "color_palette": sel_palette,
-            "pattern": sel_pattern,
-            "motif": sel_motif,
-            "style": sel_theme,
-            "finish": sel_finish,
-        }
-        st.session_state.selections = selections
-        catalog = {
-            "color_palette": list(opt.color_palettes),
-            "pattern": list(opt.patterns),
-            "motif": list(opt.motifs),
-            "style": list(opt.themes),
-            "finish": list(opt.finishes),
-        }
+    selections = {
+        "color_palette": sel_palette,
+        "pattern": sel_pattern,
+        "motif": sel_motif,
+        "style": sel_theme,
+        "finish": sel_finish,
+    }
+    st.session_state.selections = selections
+    catalog = {
+        "color_palette": list(opt.color_palettes),
+        "pattern": list(opt.patterns),
+        "motif": list(opt.motifs),
+        "style": list(opt.themes),
+        "finish": list(opt.finishes),
+    }
 
-        st.write("")  # small spacer
-        has_default = any_default(st.session_state.selections)
-        st.markdown("### Extra Detail (optional)")
-        extra = st.text_area(
-            "Add any small tweaks (e.g., butterflies, warmer gold, softer stripes)",
-            height=80,
-        )
+    st.write("")  # small spacer
+    has_default = any_default(st.session_state.selections)
+    st.markdown("### Extra Detail (Optional)")
+    extra = st.text_area(
+        "Add any small tweaks (e.g., butterflies, warmer gold, softer stripes)",
+        height=80,
+    )
 
-        st.write("")
-        submitted = st.form_submit_button(
-            "Generate",
-            width="content",
-            icon="⚙️",
-            help="click to generate Image",
-        )
-    gallery = st.empty()
+    st.write("")
+    submitted = st.form_submit_button(
+        "Generate",
+        width="content",
+        icon="⚙️",
+        help="click to generate Image",
+    )
+gallery = st.empty()
 
-with right:
-    output_folder = "outputs/now"
-    thumb_w = 115
-    if os.path.exists(output_folder):
-        # Get all image files (sorted by latest)
-        image_files = sorted(
-            [
-                f
-                for f in os.listdir(output_folder)
-                if f.lower().endswith((".png", ".jpg", ".jpeg"))
-            ],
-            key=lambda x: os.path.getmtime(os.path.join(output_folder, x)),
-            reverse=True,
-        )[
-            :5
-        ]  # latest 5
-        with st.container(border=True):
-            st.subheader("🖼️ Previous Images")
-            for i, fname in enumerate(image_files):
-                img_path = os.path.join(output_folder, fname)
-                col_img, col_btns = st.columns(
-                    [1.5, 0.5]
-                )  # left: image, right: buttons
+# with right:
+#     output_folder = "outputs/now"
+#     thumb_w = 115
+#     if os.path.exists(output_folder):
+#         # Get all image files (sorted by latest)
+#         image_files = sorted(
+#             [
+#                 f
+#                 for f in os.listdir(output_folder)
+#                 if f.lower().endswith((".png", ".jpg", ".jpeg"))
+#             ],
+#             key=lambda x: os.path.getmtime(os.path.join(output_folder, x)),
+#             reverse=True,
+#         )[
+#             :5
+#         ]  # latest 5
+#         with st.container(border=True):
+#             st.subheader("🖼️ Previous Images")
+#             for i, fname in enumerate(image_files):
+#                 img_path = os.path.join(output_folder, fname)
+#                 col_img, col_btns = st.columns(
+#                     [1.5, 0.5]
+#                 )  # left: image, right: buttons
 
-                with col_img:
-                    try:
-                        st.image(Image.open(img_path), width=thumb_w)
-                    except Exception as e:
-                        st.warning(f"Could not open {fname}: {e}")
+#                 with col_img:
+#                     try:
+#                         st.image(Image.open(img_path), width=thumb_w)
+#                     except Exception as e:
+#                         st.warning(f"Could not open {fname}: {e}")
 
-                with col_btns:
-                    st.button(
-                        "Use",
-                        key=f"use_{i}",
-                        on_click=set_org,
-                        args=(img_path,),
-                        width="stretch",
-                        help="Use",
-                    )
-                    st.button(
-                        "🗑️",
-                        key=f"del_{i}",
-                        on_click=delete_image,
-                        args=(os.path.abspath(img_path), img_path),
-                        width="stretch",
-                        help="Delete",
-                    )
-    else:
-        st.info("No previous images found yet.")
+#                 with col_btns:
+#                     st.button(
+#                         "Use",
+#                         key=f"use_{i}",
+#                         on_click=set_org,
+#                         args=(img_path,),
+#                         width="stretch",
+#                         help="Use",
+#                     )
+#                     st.button(
+#                         "🗑️",
+#                         key=f"del_{i}",
+#                         on_click=delete_image,
+#                         args=(os.path.abspath(img_path), img_path),
+#                         width="stretch",
+#                         help="Delete",
+#                     )
+#     else:
+#         st.info("No previous images found yet.")
 
 
 # =========================================================
@@ -368,10 +369,10 @@ if submitted:
 
             for idx, combo in enumerate(designs_to_run, start=1):
                 prompt_design = _strip_defaults(combo)
-                final_prompt = Imagine.build_napkin_prompt(
-                    theme_key=theme_key, design=prompt_design, extra=extra
-                )
-
+                # final_prompt = Imagine.build_napkin_prompt(
+                #     theme_key=theme_key, design=prompt_design, extra=extra
+                # )
+                final_prompt = Imagine.build_plate_prompt(combo)
                 img, variants = gen.generate_with_gemini(final_prompt)
                 # img, variants = gen.generate_with_openai(final_prompt)
                 # img, variants = gen.generate_mock_image(index=idx)
@@ -417,7 +418,7 @@ with right:
     image_sets = st.session_state.get("image_sets", [])
     if image_sets:
         with st.container(border=True):
-            st.subheader("Edit your Image")
+            st.subheader("Design")
             combo_labels = []
             for idx, combo_set in enumerate(image_sets):
                 combo = combo_set.get("combo", {}) or {}
@@ -427,91 +428,128 @@ with right:
                     if combo.get(key)
                 ]
                 hint = ", ".join(label_bits[:2])
+                st.badge(f"Combination {idx+1 if len(image_sets) > 1 else ''}")
+                st.markdown(
+                    """
+                    <style>
+                    .kv-pair {
+                        font-size: 14px;
+                        margin-bottom: 4px;
+                    }
+                    .kv-label {
+                        font-weight: 600;
+                        color: #4B5563; /* cool gray */
+                        text-transform: capitalize;
+                    }
+                    .kv-value {
+                        color: #111827;
+                        margin-left: 4px;
+                    }
+                    .divider {
+                        height: 1px;
+                        background-color: #E5E7EB;
+                        margin: 8px 0 10px 0;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                for k, v in combo.items():
+                    if k == "rationale":
+                        continue
+                    label = k.replace("_", " ")
+                    val = v.title()
+                    st.markdown(
+                        f"<div class='kv-pair'><span class='kv-label'>{label}:</span> "
+                        f"<span class='kv-value'>{val}</span></div>"
+                        f"<div class='divider'></div>",
+                        unsafe_allow_html=True,
+                    )
                 combo_labels.append(f"Combination {idx + 1}")
 
             default_idx = min(
                 st.session_state.get("selected_combo_index", 0),
                 len(image_sets) - 1,
             )
-            combo_index = st.selectbox(
-                "Select the combination",
-                options=list(range(len(image_sets))),
-                index=default_idx,
-                format_func=lambda i: combo_labels[i],
-                key="combo_selector",
-            )
-            st.session_state.selected_combo_index = combo_index
-            selected_combo = image_sets[combo_index].get("combo", {}) or {}
-            rationale = selected_combo.get("rationale")
+            # combo_index = st.selectbox(
+            #     "Select the combination",
+            #     options=list(range(len(image_sets))),
+            #     index=default_idx,
+            #     format_func=lambda i: combo_labels[i],
+            #     key="combo_selector",
+            # )
+            # st.session_state.selected_combo_index = combo_index
+            # selected_combo = image_sets[combo_index].get("combo", {}) or {}
+            # rationale = selected_combo.get("rationale")
             # if rationale:
             #     st.caption(f"Why it works: {rationale}")
 
-            enhancement_options = ["Low", "Medium", "High"]
-            combo_levels = st.session_state.get("combo_enhancement_levels", {})
-            default_level = combo_levels.get(
-                combo_index, st.session_state.get("enhancement_level", "Low")
-            )
-            if default_level not in enhancement_options:
-                default_level = "Low"
-            select_key = f"enhancement_level_combo_{combo_index}"
-            selected_level = st.selectbox(
-                "Select the enhancement for preview",
-                enhancement_options,
-                key=select_key,
-            )
-            combo_levels[combo_index] = selected_level
-            st.session_state.enhancement_level = selected_level
+            # enhancement_options = ["Low", "Medium", "High"]
+            # combo_levels = st.session_state.get("combo_enhancement_levels", {})
+            # default_level = combo_levels.get(
+            #     combo_index, st.session_state.get("enhancement_level", "Low")
+            # )
+            # if default_level not in enhancement_options:
+            #     default_level = "Low"
+            # select_key = f"enhancement_level_combo_{combo_index}"
+            # selected_level = st.selectbox(
+            #     "Select the enhancement for preview",
+            #     enhancement_options,
+            #     key=select_key,
+            # )
+            # combo_levels[combo_index] = selected_level
+            # st.session_state.enhancement_level = selected_level
 
-            source_map = {
-                "Original": ("original", None),
-                "Low Enhanced": ("enhanced", "low"),
-                "Medium Enhanced": ("enhanced", "medium"),
-                "High Enhanced": ("enhanced", "high"),
-            }
-            st.markdown("#### Prompt")
-            mask_file = st.selectbox(
-                "Select the source image to edit",
-                list(source_map.keys()),
-                key="edit_base_choice",
-            )
-            st.caption(f"Selected Combination for edit is : {combo_index+1}")
-            base_kind, variant_key = source_map[mask_file]
-            if base_kind == "original":
-                base_img = image_sets[combo_index]["original"]
-            else:
-                base_img = image_sets[combo_index]["enhanced"][variant_key]
+            # source_map = {
+            #     "Original": ("original", None),
+            #     "Low Enhanced": ("enhanced", "low"),
+            #     "Medium Enhanced": ("enhanced", "medium"),
+            #     "High Enhanced": ("enhanced", "high"),
+            # }
+            # st.markdown("#### Prompt")
+            # mask_file = st.selectbox(
+            #     "Select the source image to edit",
+            #     list(source_map.keys()),
+            #     key="edit_base_choice",
+            # )
+            # st.caption(f"Selected Combination for edit is : {combo_index+1}")
+            # base_kind, variant_key = source_map[mask_file]
+            # if base_kind == "original":
+            #     base_img = image_sets[combo_index]["original"]
+            # else:
+            #     base_img = image_sets[combo_index]["enhanced"][variant_key]
 
-            # optional: show a tiny thumbnail of the chosen base
-            # st.image(base_img, width=50)
-            edit_prompt = st.text_area(
-                "Describe how to edit the image (e.g., 'make the background white, add subtle gold shimmer')",
-                height=80,
-                key="edit_prompt",
-                placeholder="Type your edit prompt here...",
-            )
-            apply = st.button("Apply Edit", width="stretch")
-            if apply:
-                status = "editing"
-                if not edit_prompt.strip():
-                    st.warning("Please write an edit prompt.")
-                else:
-                    try:
-                        edit = Edit()
-                        image_to_edit = base_img
-                        response = edit.edit_with_gemini(
-                            base_img=image_to_edit, prompt=edit_prompt
-                        )
-                        with st.spinner("editing.."):
-                            if response.get("status"):
-                                eimg = response.get("images")["org"]
-                                st.session_state.image_sets[combo_index][
-                                    "edited"
-                                ] = eimg
-                                st.success("Image Edited Successfully")
-                            else:
-                                st.error(f"Unable to edit, got {response.get('type')}")
-                    except Exception as e:
-                        logger.error(f"Error Occurred while editing: {e}")
+            # # optional: show a tiny thumbnail of the chosen base
+            # # st.image(base_img, width=50)
+            # edit_prompt = st.text_area(
+            #     "Describe how to edit the image (e.g., 'make the background white, add subtle gold shimmer')",
+            #     height=80,
+            #     key="edit_prompt",
+            #     placeholder="Type your edit prompt here...",
+            # )
+            # apply = st.button("Apply Edit", width="stretch")
+            # if apply:
+            #     status = "editing"
+            #     if not edit_prompt.strip():
+            #         st.warning("Please write an edit prompt.")
+            #     else:
+            #         try:
+            #             edit = Edit()
+            #             image_to_edit = base_img
+            #             response = edit.edit_with_gemini(
+            #                 base_img=image_to_edit, prompt=edit_prompt
+            #             )
+            #             with st.spinner("editing.."):
+            #                 if response.get("status"):
+            #                     eimg = response.get("images")["org"]
+            #                     st.session_state.image_sets[combo_index][
+            #                         "edited"
+            #                     ] = eimg
+            #                     st.success("Image Edited Successfully")
+            #                 else:
+            #                     st.error(f"Unable to edit, got {response.get('type')}")
+            #         except Exception as e:
+            #             logger.error(f"Error Occurred while editing: {e}")
 
     else:
         """"""
@@ -520,17 +558,20 @@ with left:
     if image_sets:
         combo_levels = st.session_state.get("combo_enhancement_levels", {})
         key_map = {"Low": "low", "Medium": "medium", "High": "high"}
-
         for idx, image_set in enumerate(image_sets):
             chosen_level = combo_levels.get(
                 idx, st.session_state.get("enhancement_level", "Low")
             )
             if chosen_level not in key_map:
-                chosen_level = "Low"
+                chosen_level = "Medium"
             chosen_variant_key = key_map[chosen_level]
 
             combo = image_set.get("combo", {}) or {}
-            header = f"Combination {idx + 1}"
+            header = (
+                f"Combination {idx + 1}"
+                if len(image_sets) > 1
+                else "Selected Combination"
+            )
             st.markdown(f"**{header}**")
 
             details = [
@@ -539,8 +580,8 @@ with left:
                 if combo.get(key) and combo.get(key) != "Default"
             ]
             rationale = combo.get("rationale")
-            if details:
-                st.caption("; ".join(details))
+            # if details:
+            #     st.caption("; ".join(details))
             if rationale:
                 st.caption(f"Rationale: {rationale}")
 
@@ -570,7 +611,7 @@ with left:
                 )
                 st.image(
                     enhanced_img,
-                    caption=f"Enhanced ({chosen_level})",
+                    caption=f"Enhanced",
                     width="content",
                 )
                 buf = io.BytesIO()
