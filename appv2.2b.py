@@ -34,11 +34,11 @@ client_gemini = genai.Client(api_key=GEMINI_API_KEY)
 gemini_client = GeminiClient()
 
 st.set_page_config(
-    page_title="Imagine - Premium Napkin Generator", page_icon="🎨", layout="wide"
+    page_title="Imagine - Premium Plate Generator", page_icon="🎨", layout="wide"
 )
-st.title("🎨 Premium Paper Napkin — Theme-led Generator")
+st.title("🎨 Premium Paper Plate Design Generator")
 st.caption(
-    "Pick a theme, choose render settings, (optionally) add extra art direction."
+    "Create stunning, theme-based plate designs with customizable colors, patterns, and finishes."
 )
 
 if not API_KEY:
