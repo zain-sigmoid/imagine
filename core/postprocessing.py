@@ -46,6 +46,45 @@ class PostProcessing:
         return cv2.addWeighted(img_rgb, 1 + amount, blur, -amount, 0)
 
     @staticmethod
+    def _white_point_neutral(img_rgb, percentile=99.2, target=245):
+        """Neutral-preserving white point: compute a single gain from luminance."""
+        arr = img_rgb.astype(np.float32)
+        # luminance approximation (keeps grays neutral if scaled equally)
+        Y = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+        p = np.percentile(Y, percentile)
+        gain = target / max(p, 1.0)
+        arr = np.clip(arr * gain, 0, 255)
+        return arr.astype(np.uint8)
+
+    @staticmethod
+    @staticmethod
+    def _vibrance_hsv_bg_protected(
+        img_rgb, vib=0.18, bg_s_thresh=0.12, bg_v_thresh=0.90
+    ):
+        # to HSV as float for math
+        hsv = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2HSV).astype(np.float32)
+        h, s, v = cv2.split(hsv)
+        s_n = s / 255.0
+        v_n = v / 255.0
+
+        # near-white background mask
+        bg = (s_n < bg_s_thresh) & (v_n > bg_v_thresh)
+
+        # vibrance curve
+        s_new = np.clip((s_n + vib * (1.0 - s_n)) * 255.0, 0, 255)
+
+        # protect background
+        s_new[bg] = s[bg]
+
+        # *** ensure SAME TYPE for merge ***
+        h_u8 = h.astype(np.uint8)
+        s_u8 = s_new.astype(np.uint8)
+        v_u8 = v.astype(np.uint8)
+
+        hsv_u8 = cv2.merge([h_u8, s_u8, v_u8])  # all uint8, same size
+        return cv2.cvtColor(hsv_u8, cv2.COLOR_HSV2RGB)
+
+    @staticmethod
     def enhance_image(pil_img: Image.Image, strength: str = "low") -> Image.Image:
         """
         Safer enhancer for watercolor/foil napkins.
@@ -69,7 +108,10 @@ class PostProcessing:
         rgb = np.array(img)
 
         # 1) White-point gently (protect texture by not aiming full 255)
-        rgb = PostProcessing._white_point(rgb, percentile=cfg["wp_pct"], target=245)
+        # rgb = PostProcessing._white_point(rgb, percentile=cfg["wp_pct"], target=245)
+        rgb = PostProcessing._white_point_neutral(
+            rgb, percentile=cfg["wp_pct"], target=245
+        )
 
         # 2) Local contrast on L channel (CLAHE) with highlight protection
         lab = PostProcessing._rgb_to_lab(rgb)
@@ -84,7 +126,8 @@ class PostProcessing:
         rgb = PostProcessing._lab_to_rgb(lab)
 
         # 3) Vibrance (not plain saturation) to keep pastels clean
-        rgb = PostProcessing._vibrance_hsv(rgb, vib=cfg["vib"])
+        # rgb = PostProcessing._vibrance_hsv(rgb, vib=cfg["vib"])
+        rgb = PostProcessing._vibrance_hsv_bg_protected(rgb, vib=cfg["vib"])
 
         # 4) Very light unsharp mask
         rgb = PostProcessing._unsharp(
