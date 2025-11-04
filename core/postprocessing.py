@@ -110,7 +110,7 @@ class PostProcessing:
         # 1) White-point gently (protect texture by not aiming full 255)
         # rgb = PostProcessing._white_point(rgb, percentile=cfg["wp_pct"], target=245)
         rgb = PostProcessing._white_point_neutral(
-            rgb, percentile=cfg["wp_pct"], target=245
+            rgb, percentile=cfg["wp_pct"], target=255
         )
 
         # 2) Local contrast on L channel (CLAHE) with highlight protection
