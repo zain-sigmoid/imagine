@@ -373,6 +373,7 @@ if submitted:
                 #     theme_key=theme_key, design=prompt_design, extra=extra
                 # )
                 final_prompt = Imagine.build_plate_prompt(combo)
+                # cprint(final_prompt, "yellow")
                 img, variants = gen.generate_with_gemini(final_prompt)
                 # img, variants = gen.generate_with_openai(final_prompt)
                 # img, variants = gen.generate_mock_image(index=idx)
