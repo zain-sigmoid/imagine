@@ -15,9 +15,11 @@ from google.genai import types
 from typing import Dict, Any, Optional
 from core.themes import THEMES_PRESETS_MIN, DEFAULTS
 from core.utils import Utility
+from termcolor import cprint
 
 STRENGTH_INDEX = {"Light": 0, "Medium": 1, "Strong": 2}
-NAPKIN_TEMPLATE = Utility.load_template()
+NAPKIN_TEMPLATE = Utility.load_template(template="napkin")
+PROMPT_TEMPLATE = Utility.load_template()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -116,6 +118,17 @@ class Imagine:
         text = NAPKIN_TEMPLATE.format_map(_SafeDict(Imagine._safe_clean(base)))
         # collapse whitespace to keep prompt tidy
         return " ".join(text.split())
+
+    @staticmethod
+    def build_plate_prompt(selection: Dict[Any, str]):
+        prompt = PROMPT_TEMPLATE.format(
+            color_palette=selection.get("color_palette"),
+            pattern=selection.get("pattern"),
+            motif=selection.get("motif"),
+            theme=selection.get("style"),
+            finish=selection.get("finish"),
+        )
+        return prompt
 
     @staticmethod
     def mock_response_from_file(path: str):
