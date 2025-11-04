@@ -256,20 +256,20 @@ themes = [
     # "💼 Farewell or promotion parties at work",
 ]
 options = Options()
-st.markdown(
-    """
-        <div class="studio-card">
-            <span class="studio-pill">Smart combinations</span>
-            <span class="studio-pill">Model-agnostic workflow</span>
-            <h3 style="margin-top: 0.4rem;">Design-ready prompts tailored to your generation process.</h3>
-            <p style="margin-bottom: 0.2rem;">
-                Blend palettes, patterns, motifs, and finishes into polished briefs that align with your theme.
-                Compare original and our enhanced version, download easily with one click.
-            </p>
-        </div>
-        """,
-    unsafe_allow_html=True,
-)
+# st.markdown(
+#     """
+#         <div class="studio-card">
+#             <span class="studio-pill">Smart combinations</span>
+#             <span class="studio-pill">Model-agnostic workflow</span>
+#             <h3 style="margin-top: 0.4rem;">Design-ready prompts tailored to your generation process.</h3>
+#             <p style="margin-bottom: 0.2rem;">
+#                 Blend palettes, patterns, motifs, and finishes into polished briefs that align with your theme.
+#                 Compare original and our enhanced version, download easily with one click.
+#             </p>
+#         </div>
+#         """,
+#     unsafe_allow_html=True,
+# )
 # hero_col, info_col = st.columns([3, 2], vertical_alignment="center")
 # with hero_col:
 #     st.markdown(
