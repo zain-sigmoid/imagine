@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(88 92) rotate(37) scale(520)">
+      <stop stop-color="#EDF1FF"/>
+      <stop offset="0.45" stop-color="#CFD7FF"/>
+      <stop offset="1" stop-color="#A0AAFF"/>
+    </radialGradient>
+    <linearGradient id="swoosh" x1="190" y1="340" x2="380" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFC680"/>
+      <stop offset="1" stop-color="#FF9D69"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <circle cx="256" cy="256" r="176" fill="white" fill-opacity="0.92"/>
+    <circle cx="256" cy="256" r="138" stroke="#909BFF" stroke-opacity="0.45" stroke-width="18" stroke-dasharray="6 12"/>
+  </g>
+  <path d="M206 322C228 354 294 348 337 276C352 251 360 226 361 204C361 169 318 176 279 216C239 258 199 286 206 322Z" fill="url(#swoosh)" fill-opacity="0.92"/>
+  <path d="M208 322C229 351 292 348 335 279" stroke="#FFB873" stroke-width="14" stroke-linecap="round"/>
+  <g font-family="'Avenir Next', 'Arial', sans-serif" font-weight="700" font-size="120" fill="#2E3470" text-anchor="middle" dominant-baseline="middle">
+    <text x="256" y="244">IM</text>
+  </g>
+  <defs>
+    <filter id="shadow" x="40" y="44" width="432" height="432" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#2233AF" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+</svg>

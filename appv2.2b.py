@@ -34,11 +34,72 @@ client_gemini = genai.Client(api_key=GEMINI_API_KEY)
 gemini_client = GeminiClient()
 
 st.set_page_config(
-    page_title="Imagine - Premium Plate Generator", page_icon="🎨", layout="wide"
+    page_title="Imagine - Premium Plate Generator",
+    page_icon="assets/imagine_icon.svg",
+    layout="wide",
 )
-st.title("🎨 Premium Paper Plate Design Generator")
-st.caption(
-    "Create stunning, theme-based plate designs with customizable colors, patterns, and finishes."
+
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: radial-gradient(circle at 0% 0%, rgba(236, 243, 255, 0.95), rgba(255, 255, 255, 0.95));
+    }
+    .studio-card {
+        padding: 1.2rem 1.4rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.83);
+        border: 1px solid rgba(110, 125, 245, 0.08);
+        # box-shadow: 0 18px 42px rgba(34, 53, 131, 0.08);
+    }
+    .studio-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        background: #ecf0ff;
+        color: #4f5cd1;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-right: 0.4rem;
+        
+    }
+    .prompt-box {
+        background: rgba(241, 244, 255, 0.85);
+        border: 1px solid rgba(79, 92, 209, 0.12);
+        padding: 0.85rem 1rem;
+        border-radius: 14px;
+        margin-bottom:1rem;
+        # box-shadow: 0 18px 42px rgba(34, 53, 131, 0.08);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# st.title("🎨 Luma")
+# st.header("AI-Powered Design for Paperware")
+# st.subheader(
+#     "Transform your paperware manufacturing with intelligent design automation"
+# )
+ICON = """
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 64 64" fill="none">
+  <path d="M32 6 c-2.4 7.3-8.7 13.6-16 16 c7.3 2.4 13.6 8.7 16 16 c2.4-7.3 8.7-13.6 16-16 c-7.3-2.4-13.6-8.7-16-16z"
+        fill="none" stroke="#7C3AED" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 10 v6 M47 13 h6" stroke="#7C3AED" stroke-width="6" stroke-linecap="round"/>
+  <path d="M14 44 v6 M11 47 h6" stroke="#7C3AED" stroke-width="6" stroke-linecap="round"/>
+</svg>
+"""
+st.markdown(
+    f"""
+    <h1 style='text-align: center;'>{ICON}Luma</h1>
+    <h2 style='text-align: center;'>AI-Powered Design for Paperware</h2>
+    <h4 style='text-align: center; color: gray; margin-bottom:3%;'>
+        Transform your paperware manufacturing with intelligent design automation
+    </h4>
+    """,
+    unsafe_allow_html=True,
 )
 
 if not API_KEY:
@@ -194,10 +255,79 @@ themes = [
     "🎉 New Year’s brunch",
     # "💼 Farewell or promotion parties at work",
 ]
+options = Options()
+st.markdown(
+    """
+        <div class="studio-card">
+            <span class="studio-pill">Smart combinations</span>
+            <span class="studio-pill">Model-agnostic workflow</span>
+            <h3 style="margin-top: 0.4rem;">Design-ready prompts tailored to your generation process.</h3>
+            <p style="margin-bottom: 0.2rem;">
+                Blend palettes, patterns, motifs, and finishes into polished briefs that align with your theme.
+                Compare original and our enhanced version, download easily with one click.
+            </p>
+        </div>
+        """,
+    unsafe_allow_html=True,
+)
+# hero_col, info_col = st.columns([3, 2], vertical_alignment="center")
+# with hero_col:
+#     st.markdown(
+#         """
+#         <div class="studio-card">
+#             <span class="studio-pill">Smart combinations</span>
+#             <span class="studio-pill">Model-agnostic workflow</span>
+#             <h3 style="margin-top: 0.4rem;">Design-ready prompts tailored to your generation process.</h3>
+#             <p style="margin-bottom: 0.2rem;">
+#                 Blend palettes, patterns, motifs, and finishes into polished briefs that align with your theme.
+#                 Compare original and our enhanced version, download easily with one click.
+#             </p>
+#         </div>
+#         """,
+#         unsafe_allow_html=True,
+#     )
+
+# with info_col:
+#     """"""
+# with st.container(border=True):
+#     metric_cols = st.columns(5)
+#     metric_cols[0].metric("Color Palettes", len(options.color_palettes))
+#     metric_cols[1].metric("Pattern", len(options.patterns))
+#     metric_cols[2].metric("Motif", len(options.motifs))
+#     metric_cols[3].metric("Style", len(options.themes))
+#     metric_cols[4].metric("Finishes", len(options.finishes))
+#     st.markdown(
+#         "<div class='prompt-box'>Need to seed ideas quickly? Mix & match options below and let the combiner propose elevated pairings.</div>",
+#         unsafe_allow_html=True,
+#     )
+
+st.markdown(
+    """
+    <style>
+    div[data-baseweb="select"] {
+        width: fit-content !important;
+        min-width: 240px;
+    }
+    div[data-baseweb="select"] > div {
+        # background: radial-gradient(circle at 0% 0%, rgba(220, 235, 255, 0.95), rgba(240, 225, 255, 0.95)) !important;
+        background : white;
+        border-radius: 8px;
+        border: 1px solid #c3c8d4;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        min-width:50%;
+    }
+    .stTextArea {
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 left, right = st.columns([6, 2], vertical_alignment="top")
 with st.form("gen"):
     st.markdown("### Design Theme")
-    theme_key = st.selectbox("Theme", themes, index=0)
+    theme_key = st.selectbox("Theme", themes, index=0, width="stretch")
 
     # st.markdown("### Render Settings")
     # option = st.selectbox(
@@ -209,7 +339,7 @@ with st.form("gen"):
     st.badge(
         "Default will choose three best combination from the drop down",
         icon="🚨",
-        color="gray",
+        color="blue",
     )
     r1, r2, r3, r4, r5 = st.columns(5)
     with r1:
