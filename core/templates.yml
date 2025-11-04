@@ -49,3 +49,10 @@ NAPKIN_TEMPLATE: |
 
   Extra art direction (if provided by user)
   {extra}
+
+PROMPT_TEMPLATE: |
+  "Design a premium, print-ready paper plate featuring {color_palette}, "
+  "with {pattern} as the base, highlighted by {motif} in a {theme} style. "
+  "Incorporate finishing details like {finish} for a polished, commercial look. "
+  "The design should balance aesthetics with festive usability and align with U.S. "
+  "retail holiday/gifting trends."
